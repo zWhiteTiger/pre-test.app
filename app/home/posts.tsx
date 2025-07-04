@@ -27,6 +27,7 @@ import { LuRefreshCcw } from 'react-icons/lu';
 import VoteButtons from './votebutton';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import SearchSort from './filter';
 
 interface Metadata {
     _id: string;
@@ -51,23 +52,43 @@ export default function Posts({ user }: Props) {
     const [editingPostId, setEditingPostId] = useState<string | null>(null);
     const [reportingPostId, setReportingPostId] = useState<string | null>(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
-    
 
-    const fetchPosts = async () => {
+
+    const fetchPosts = async (params?: { keyword?: string; sortBy?: string; order?: string }) => {
         setLoading(true);
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}metadata`, {
+            const query = new URLSearchParams();
+
+            if (params?.keyword) query.append('keyword', params.keyword);
+            if (params?.sortBy) query.append('sortBy', params.sortBy);
+            if (params?.order) query.append('order', params.order);
+
+            const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}metadata/search?${query.toString()}`;
+            console.log('Fetching posts from:', url);
+
+            const res = await fetch(url, {
                 credentials: 'include',
             });
-            if (!res.ok) throw new Error('Failed to fetch posts');
+
+            if (!res.ok) {
+                const text = await res.text();
+                console.error('Failed to fetch posts:', res.status, text);
+                throw new Error('Failed to fetch posts');
+            }
+
             const data: Metadata[] = await res.json();
-            data.sort((a, b) => new Date(b.createAt).getTime() - new Date(a.createAt).getTime());
             setPosts(data);
         } catch (err) {
             console.error(err);
         }
         setLoading(false);
     };
+
+
+    // เรียก fetchPosts ตอน mount ด้วย default params
+    useEffect(() => {
+        fetchPosts({ sortBy: 'createdAt', order: 'desc' });
+    }, [])
 
     const handleSaveEdit = async () => {
         if (!editingPostId) return;
@@ -91,10 +112,6 @@ export default function Posts({ user }: Props) {
         }
     };
 
-    useEffect(() => {
-        fetchPosts();
-    }, []);
-
     const handleDeletePost = async (id: string) => {
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}metadata/${id}`, {
@@ -113,10 +130,14 @@ export default function Posts({ user }: Props) {
         <div className="space-y-6">
             <div className="flex justify-end mb-4 w-lg gap-5">
 
-                <Button onClick={fetchPosts} disabled={loading}>
-                    <LuRefreshCcw />
-                    {loading ? 'Loading...' : 'Refresh'}
-                </Button>
+                <SearchSort onSearchSortChange={fetchPosts} />
+
+                <div className="flex justify-end mb-4 w-lg gap-5">
+                    <Button onClick={() => fetchPosts()} disabled={loading}>
+                        <LuRefreshCcw />
+                        {loading ? 'Loading...' : 'Refresh'}
+                    </Button>
+                </div>
             </div>
 
             {posts.length === 0 && !loading && <div>No posts found.</div>}
